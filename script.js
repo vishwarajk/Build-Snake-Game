@@ -1,128 +1,155 @@
-console.log("Let The Game Begin!");
+const chatInput = document.querySelector("#chat-input");
+const sendButton = document.querySelector("#send-btn");
+const chatContainer = document.querySelector(".chat-container");
+const themeButton = document.querySelector("#theme-btn");
+const deleteButton = document.querySelector("#delete-btn");
 
-let snake = [{ top: 200, left: 200 }];
-let direction = { key: "ArrowRight", dx: 20, dy: 0 };
-let food = null;
-let score = 0;
-let highScore = 0;
-let speed = 100;
-window.addEventListener("keydown", (e) => {
-  const newDirection = getDirection(e.key);
-  console.log("Key I have Pressed", e.key);
-  const allowedChange = Math.abs(direction.dx) !== Math.abs(newDirection.dx);
-  if (allowedChange) direction = newDirection;
+let userText = null;
+const API_KEY = "PASTE-YOUR-API-KEY-HERE"; // Paste your API key here
+
+const loadDataFromLocalstorage = () => {
+    // Load saved chats and theme from local storage and apply/add on the page
+    const themeColor = localStorage.getItem("themeColor");
+
+    document.body.classList.toggle("light-mode", themeColor === "light_mode");
+    themeButton.innerText = document.body.classList.contains("light-mode") ? "dark_mode" : "light_mode";
+
+    const defaultText = `<div class="default-text">
+                            <h1>ChatGPT Clone</h1>
+                            <p>Start a conversation and explore the power of AI.<br> Your chat history will be displayed here.</p>
+                        </div>`
+
+    chatContainer.innerHTML = localStorage.getItem("all-chats") || defaultText;
+    chatContainer.scrollTo(0, chatContainer.scrollHeight); // Scroll to bottom of the chat container
+}
+
+const createChatElement = (content, className) => {
+    // Create new div and apply chat, specified class and set html content of div
+    const chatDiv = document.createElement("div");
+    chatDiv.classList.add("chat", className);
+    chatDiv.innerHTML = content;
+    return chatDiv; // Return the created chat div
+}
+
+const getChatResponse = async (incomingChatDiv) => {
+    const API_URL = "https://api.openai.com/v1/completions";
+    const pElement = document.createElement("p");
+
+    // Define the properties and data for the API request
+    const requestOptions = {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${API_KEY}`
+        },
+        body: JSON.stringify({
+            model: "text-davinci-003",
+            prompt: userText,
+            max_tokens: 2048,
+            temperature: 0.2,
+            n: 1,
+            stop: null
+        })
+    }
+
+    // Send POST request to API, get response and set the reponse as paragraph element text
+    try {
+        const response = await (await fetch(API_URL, requestOptions)).json();
+        pElement.textContent = response.choices[0].text.trim();
+    } catch (error) { // Add error class to the paragraph element and set error text
+        pElement.classList.add("error");
+        pElement.textContent = "Oops! Something went wrong while retrieving the response. Please try again.";
+    }
+
+    // Remove the typing animation, append the paragraph element and save the chats to local storage
+    incomingChatDiv.querySelector(".typing-animation").remove();
+    incomingChatDiv.querySelector(".chat-details").appendChild(pElement);
+    localStorage.setItem("all-chats", chatContainer.innerHTML);
+    chatContainer.scrollTo(0, chatContainer.scrollHeight);
+}
+
+const copyResponse = (copyBtn) => {
+    // Copy the text content of the response to the clipboard
+    const reponseTextElement = copyBtn.parentElement.querySelector("p");
+    navigator.clipboard.writeText(reponseTextElement.textContent);
+    copyBtn.textContent = "done";
+    setTimeout(() => copyBtn.textContent = "content_copy", 1000);
+}
+
+const showTypingAnimation = () => {
+    // Display the typing animation and call the getChatResponse function
+    const html = `<div class="chat-content">
+                    <div class="chat-details">
+                        <img src="images/chatbot.jpg" alt="chatbot-img">
+                        <div class="typing-animation">
+                            <div class="typing-dot" style="--delay: 0.2s"></div>
+                            <div class="typing-dot" style="--delay: 0.3s"></div>
+                            <div class="typing-dot" style="--delay: 0.4s"></div>
+                        </div>
+                    </div>
+                    <span onclick="copyResponse(this)" class="material-symbols-rounded">content_copy</span>
+                </div>`;
+    // Create an incoming chat div with typing animation and append it to chat container
+    const incomingChatDiv = createChatElement(html, "incoming");
+    chatContainer.appendChild(incomingChatDiv);
+    chatContainer.scrollTo(0, chatContainer.scrollHeight);
+    getChatResponse(incomingChatDiv);
+}
+
+const handleOutgoingChat = () => {
+    userText = chatInput.value.trim(); // Get chatInput value and remove extra spaces
+    if(!userText) return; // If chatInput is empty return from here
+
+    // Clear the input field and reset its height
+    chatInput.value = "";
+    chatInput.style.height = `${initialInputHeight}px`;
+
+    const html = `<div class="chat-content">
+                    <div class="chat-details">
+                        <img src="images/user.jpg" alt="user-img">
+                        <p>${userText}</p>
+                    </div>
+                </div>`;
+
+    // Create an outgoing chat div with user's message and append it to chat container
+    const outgoingChatDiv = createChatElement(html, "outgoing");
+    chatContainer.querySelector(".default-text")?.remove();
+    chatContainer.appendChild(outgoingChatDiv);
+    chatContainer.scrollTo(0, chatContainer.scrollHeight);
+    setTimeout(showTypingAnimation, 500);
+}
+
+deleteButton.addEventListener("click", () => {
+    // Remove the chats from local storage and call loadDataFromLocalstorage function
+    if(confirm("Are you sure you want to delete all the chats?")) {
+        localStorage.removeItem("all-chats");
+        loadDataFromLocalstorage();
+    }
 });
 
-function getDirection(key) {
-  switch (key) {
-    case "ArrowUp" || "w":
-      return { key, dx: 0, dy: -20 };
-    case "ArrowDown" || "s":
-      return { key, dx: 0, dy: 20 };
-    case "ArrowLeft" || "a":
-      return { key, dx: -20, dy: 0 };
-    case "ArrowRight" || "d":
-      return { key, dx: 20, dy: 0 };
-    default:
-      return direction;
-  }
-}
+themeButton.addEventListener("click", () => {
+    // Toggle body's class for the theme mode and save the updated theme to the local storage 
+    document.body.classList.toggle("light-mode");
+    localStorage.setItem("themeColor", themeButton.innerText);
+    themeButton.innerText = document.body.classList.contains("light-mode") ? "dark_mode" : "light_mode";
+});
 
-function moveSnake() {
-  const head = Object.assign({}, snake[0]); // copy head
-  head.top += direction.dy;
-  head.left += direction.dx;
-  snake.unshift(head);
+const initialInputHeight = chatInput.scrollHeight;
 
-  if (snake[0].top < 0) snake[0].top = 380;
-  if (snake[0].left < 0) snake[0].left = 380;
-  if (snake[0].top > 380) snake[0].top = 0;
-  if (snake[0].left > 380) snake[0].left = 0;
+chatInput.addEventListener("input", () => {   
+    // Adjust the height of the input field dynamically based on its content
+    chatInput.style.height =  `${initialInputHeight}px`;
+    chatInput.style.height = `${chatInput.scrollHeight}px`;
+});
 
-  if (!eatFood()) snake.pop(); // if the snake doesn't eat food, remove the tail
-}
-
-function randomFood() {
-  food = {
-    top: Math.floor(Math.random() * 20) * 20,
-    left: Math.floor(Math.random() * 20) * 20,
-  };
-}
-
-function eatFood() {
-  if (snake[0].top === food.top && snake[0].left === food.left) {
-    food = null;
-    return true;
-  }
-  return false;
-}
-
-function gameOver() {
-  for (let i = 1; i < snake.length; i++) {
-    if (snake[i].top === snake[0].top && snake[i].left === snake[0].left)
-      return true;
-  }
-  return false;
-}
-
-function updateScore() {
-  document.getElementById("score").innerText = "Score: " + score;
-  document.getElementById("high-score").innerText = "High Score: " + highScore;
-}
-
-function gameLoop() {
-  if (gameOver()) {
-    alert("Game over!");
-    // Resetting Everything
-    if (score > highScore) {
-      highScore = score;
+chatInput.addEventListener("keydown", (e) => {
+    // If the Enter key is pressed without Shift and the window width is larger 
+    // than 800 pixels, handle the outgoing chat
+    if (e.key === "Enter" && !e.shiftKey && window.innerWidth > 800) {
+        e.preventDefault();
+        handleOutgoingChat();
     }
-    score = 0;
-    speed = 100;
-    snake = [{ top: 200, left: 200 }];
-    direction = { key: "ArrowRight", dx: 20, dy: 0 };
-    food = null;
-    randomFood();
-  }
+});
 
-  setTimeout(() => {
-    document.getElementById("game-board").innerHTML = "";
-    moveSnake();
-    if (!food) {
-      randomFood();
-      score += 2;
-      speed = speed - 2;
-    }
-    if (eatFood()) {
-      document.getElementById("score").innerHTML = `Score :${score}`;
-    }
-    updateScore();
-    drawSnake();
-    drawFood();
-    gameLoop();
-  }, speed);
-}
-
-drawSnake();
-randomFood();
-gameLoop();
-
-function drawSnake() {
-  snake.forEach((item, index) => {
-    const snakeElement = document.createElement("div");
-    snakeElement.style.top = `${item.top}px`;
-    snakeElement.style.left = `${item.left}px`;
-    snakeElement.classList.add("snake");
-    if (index === 0) snakeElement.classList.add("head");
-    if (index === snake.length - 1) snakeElement.classList.add("head");
-    document.getElementById("game-board").appendChild(snakeElement);
-  });
-}
-
-function drawFood() {
-  const foodElement = document.createElement("div");
-  foodElement.style.top = `${food.top}px`;
-  foodElement.style.left = `${food.left}px`;
-  foodElement.classList.add("food");
-  document.getElementById("game-board").appendChild(foodElement);
-}
+loadDataFromLocalstorage();
+sendButton.addEventListener("click", handleOutgoingChat);
